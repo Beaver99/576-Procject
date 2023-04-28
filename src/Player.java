@@ -3,6 +3,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
@@ -13,7 +14,7 @@ import java.awt.Color;
 import javax.swing.ImageIcon;
 
 public class Player {
-    public static void play(File rgbs, File audio, Index[] idxs) {
+    public static void play(File rgbs, File audio, ArrayList<Index> idxs) {
         // just a demo
         int width = 480; // width of the video frames
         int height = 270; // height of the video frames
