@@ -1,5 +1,5 @@
 public class Index {
-    int idx;
+    long idx;
     Level level;
 
     public Index(int idx, Level l) {
