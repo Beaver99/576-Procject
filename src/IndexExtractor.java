@@ -11,6 +11,7 @@ public class IndexExtractor {
     static int height = 270; // height of the video frames
     static int fps = 30; // frames per second of the video
 
+    static long prev_Cut_idx = 0;
     static int[] prev_Scene = new int[width * height];
     static int[] prev_Shot = new int[width * height];
     static int[] prev_Subshot = new int[width * height];
@@ -46,6 +47,7 @@ public class IndexExtractor {
         ArrayList<Index> idxs = new ArrayList<>();
 
         long numFrames = rgbs.length();
+        long minimal_interval = numFrames / 200;
 
         RandomAccessFile raf = null;
         FileChannel channel = null;
@@ -63,7 +65,7 @@ public class IndexExtractor {
             float T3 = 0.3F;
 
             // step 2
-            for (int i = 0; i < numFrames; i++) {
+            for (long i = 0; i < numFrames; i++) {
                 buffer.clear();
                 channel.read(buffer);
                 buffer.rewind();
@@ -77,7 +79,7 @@ public class IndexExtractor {
                     }
                 }
 
-                if (i != 0) {
+                if (i - prev_Cut_idx >= minimal_interval && i != 0) {
                     // compare hDiff with 3 thresholds
                     if (histogramDifference(prev_Scene, currFrame) >= T1) {
                         idxs.add(new Index(i, Level.scene));
@@ -133,6 +135,8 @@ public class IndexExtractor {
         return 1;
     }
 
+    // extract luminance(0-255) from RGB;
+    // the weight is from YCbCr color space
     public static int rgb2lum(int r, int g, int b) {
         return (int) Math.floor(0.299 * r + 0.587 * g + 0.114 * b);
     }
