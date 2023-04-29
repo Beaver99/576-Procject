@@ -11,6 +11,12 @@ public class IndexExtractor {
     static int height = 270; // height of the video frames
     static int fps = 30; // frames per second of the video
 
+    static int[] prev_Scene = new int[width * height];
+    static int[] prev_Shot = new int[width * height];
+    static int[] prev_Subshot = new int[width * height];
+    static int[] currFrame = new int[width * height];
+
+
     public static ArrayList<Index> mockExtractIndex(File rgbs, File audio) {
         // for testing
         ArrayList<Index> idxs = new ArrayList<>();
@@ -48,8 +54,6 @@ public class IndexExtractor {
             raf = new RandomAccessFile(rgbs, "r");
             channel = raf.getChannel();
             buffer = ByteBuffer.allocate(width * height * 3);
-            int[][] prevFrame = new int[width * height][];
-            int[][] currFrame = new int[width * height][];
 
             // step 1 #todo
             // get thresholds T1 T2 T3 using statistical analysis
@@ -69,28 +73,37 @@ public class IndexExtractor {
                         int g = buffer.get() & 0xff;
                         int b = buffer.get() & 0xff;
 
-                        // use luv color space instead of rgb color space
-                        currFrame[y * width + x] = rgb2luv(r, g, b);
-
-                        if (i != 0) {
-                            float hDiff = histogramDifference(prevFrame, currFrame);
-                            // compare hDiff with 3 thresholds
-                            // if smaller than every threshold, skip;
-                            // else assign corresponding idx types to frames and add it to idxs
-                            if (hDiff >= T1) {
-                                idxs.add(new Index(i, Level.scene));
-                            } else if (hDiff >= T2) {
-                                idxs.add(new Index(i, Level.shot));
-                            } else if (hDiff >= T3) {
-                                idxs.add(new Index(i, Level.subshot));
-                            }
-                        } else {
-                            idxs.add(new Index(i, Level.scene));
-                        }
+                        currFrame[y * width + x] = rgb2lum(r, g, b);
                     }
                 }
 
-                prevFrame = currFrame;
+                if (i != 0) {
+                    // compare hDiff with 3 thresholds
+                    if (histogramDifference(prev_Scene, currFrame) >= T1) {
+                        idxs.add(new Index(i, Level.scene));
+                        System.arraycopy(currFrame, 0, prev_Scene, 0, currFrame.length);
+                        System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
+                        System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                        continue;
+                    }
+
+                    if (histogramDifference(prev_Shot, currFrame) >= T2) {
+                        idxs.add(new Index(i, Level.shot));
+                        System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
+                        System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                        continue;
+                    }
+
+                    if (histogramDifference(prev_Subshot, currFrame) >= T3) {
+                        idxs.add(new Index(i, Level.subshot));
+                        System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                    }
+                } else {
+                    idxs.add(new Index(i, Level.scene));
+                    System.arraycopy(currFrame, 0, prev_Scene, 0, currFrame.length);
+                    System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
+                    System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -112,26 +125,29 @@ public class IndexExtractor {
 
     // #todo
     // get the histogram-difference array for any 2 consecutive frames.
-    public static float histogramDifference(int[][] prev, int[][] curr) {
-        // step1: get histogram bins of prev frame and curr frame
+    public static float histogramDifference(int[] prev, int[] curr) {
+        // step1: get histogram bins of macro-blocks of prev frame and curr frame
 
-        // step2: calculate the difference using a histogramDifference measurement(not decided yet)
-        // you can see the 4 measurements mentioned in 1994.pdf 3.1
+        // step2: calculate the difference using the Block histogram difference (BH)
+        // it is the 3rd measurements mentioned in 1994.pdf 3.1
         return 1;
     }
 
-    //#todo
-    // rgb to luv color space
-    public static int[] rgb2luv(int r, int g, int b) {
-        // rgb -> xyz
-//        [ X ]   [  0.412453  0.357580  0.180423 ]   [ R ]
-//        [ Y ] = [  0.212671  0.715160  0.072169 ] * [ G ]
-//        [ Z ]   [  0.019334  0.119193  0.950227 ]   [ B ]
-
-        // xyz -> luv
-        // see https://en.wikipedia.org/wiki/CIELUV
-
-        return new int[]{0, 0, 0};
+    public static int rgb2lum(int r, int g, int b) {
+        return (int) Math.floor(0.299 * r + 0.587 * g + 0.114 * b);
     }
+
+//    // rgb to HSV/LUV color space, not decided yet
+//    public static int[] rgb2luv(int r, int g, int b) {
+//        // rgb -> xyz
+////        [ X ]   [  0.412453  0.357580  0.180423 ]   [ R ]
+////        [ Y ] = [  0.212671  0.715160  0.072169 ] * [ G ]
+////        [ Z ]   [  0.019334  0.119193  0.950227 ]   [ B ]
+//
+//        // xyz -> luv
+//        // see https://en.wikipedia.org/wiki/CIELUV
+//
+//        return new int[]{0, 0, 0};
+//    }
 
 }
