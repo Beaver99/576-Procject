@@ -2,7 +2,7 @@ public class Index {
     long idx;
     Level level;
 
-    public Index(int idx, Level l) {
+    public Index(long idx, Level l) {
         this.idx = idx;
         this.level = l;
     }
