@@ -129,11 +129,48 @@ public class IndexExtractor {
     // get the histogram-difference array for any 2 consecutive frames.
     public static float histogramDifference(int[] prev, int[] curr) {
         // step1: get histogram bins of macro-blocks of prev frame and curr frame
+        int numBins = 256;
+        int numBlocks = prev.length / (16*16);
+        int[][] prevHistogram = new int[numBlocks][numBins];
+        int[][] currHistogram = new int[numBlocks][numBins];
+        for (int i = 0; i < numBlocks; i++) {
+            int[] prevBlock = Arrays.copyOfRange(prev, i*16*16, (i+1)*16*16);
+            int[] currBlock = Arrays.copyOfRange(curr, i*16*16, (i+1)*16*16);
+            prevHistogram[i] = calculateHistogram(prevBlock);
+            currHistogram[i] = calculateHistogram(currBlock);
+        }
+
 
         // step2: calculate the difference using the Block histogram difference (BH)
-        // it is the 3rd measurements mentioned in 1994.pdf 3.1
-        return 1;
+        float totalDifference = 0;
+        for (int i = 0; i < numBlocks; i++) {
+            float blockDifference = calculateBlockDifference(prevHistogram[i], currHistogram[i]);
+            totalDifference += blockDifference;
+        }
+        float averageDifference = totalDifference / numBlocks;
+        return averageDifference;
     }
+
+    private static int[] calculateHistogram(int[] block) {
+        int numBins = 256;
+        int[] histogram = new int[numBins];
+        for (int i = 0; i < block.length; i++) {
+            histogram[block[i]]++;
+        }
+        return histogram;
+    }
+
+    private static float calculateBlockDifference(int[] prevHistogram, int[] currHistogram) {
+        float difference = 0;
+        for (int i = 0; i < prevHistogram.length; i++) {
+            float binDifference = Math.abs(prevHistogram[i] - currHistogram[i]);
+            difference += binDifference;
+        }
+        return difference;
+    }
+        // it is the 3rd measurements mentioned in 1994.pdf 3.1
+
+
 
     // extract luminance(0-255) from RGB;
     // the weight is from YCbCr color space
