@@ -41,7 +41,7 @@ public class Player {
     static AudioInputStream audioInputStream;
     static boolean isRerender = false;
 
-    public static void play(File rgbs, File audio, ArrayList<Index> idxs) throws UnsupportedAudioFileException, IOException, LineUnavailableException {
+    public static void play(File rgbs, File audio, ArrayList<Index> idxs) throws IOException, LineUnavailableException {
         // create the JFrame and JLabel to display the video
         frame.setTitle("Video Player");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -55,8 +55,6 @@ public class Player {
         for (Index i : idxs) {
             panel1.add(createButton(i));
         }
-        audioInputStream = AudioSystem.getAudioInputStream(audio);
-        clip = AudioSystem.getClip();
 
         frame.add(splitPane);
         frame.pack();
@@ -67,8 +65,8 @@ public class Player {
 
         audioThread = new Thread(() -> {
             try {
-                renderAudio(audio,0);
-            } catch (LineUnavailableException | IOException e) {
+                renderAudio(audio, 0);
+            } catch (LineUnavailableException | IOException | UnsupportedAudioFileException e) {
                 e.printStackTrace();
             }
         });
@@ -77,20 +75,34 @@ public class Player {
         audioThread.start();
     }
 
-    static void renderAudio(File audio, long startFrame) throws LineUnavailableException, IOException {
+    static void renderAudio(File audio, long startFrame) throws LineUnavailableException, IOException, UnsupportedAudioFileException {
+        audioInputStream = AudioSystem.getAudioInputStream(audio);
+        clip = AudioSystem.getClip();
+        
         long audioFrameRate = (long) audioInputStream.getFormat().getSampleRate();
         long videoFrameIndex = startFrame;
         long videoFrameRate = 30;
         int audioSamplesPerFrame = audioInputStream.getFormat().getFrameSize() / audioInputStream.getFormat().getChannels();
-
+    
         long audioFrameIndexForVideoFrame = audioFrameRate / videoFrameRate * videoFrameIndex / audioSamplesPerFrame;
-        long bytesPerFrame = audioInputStream.getFormat().getFrameSize();
-        long skipBytes = audioFrameIndexForVideoFrame * bytesPerFrame;
-        audioInputStream.skip(skipBytes);
-
+        // long bytesPerFrame = audioInputStream.getFormat().getFrameSize();
+        // long skipBytes = audioFrameIndexForVideoFrame * bytesPerFrame;
+        // audioInputStream.skip(skipBytes);
+    
         clip.open(audioInputStream);
         clip.setFramePosition((int) audioFrameIndexForVideoFrame);
         clip.start();
+    
+        while (clip != null) {
+            if (clip.getFramePosition() > 0) {
+                if (isRerender) {
+                    clip.stop();
+                    long updatedAudioFrameIndexForVideoFrame = audioFrameRate / videoFrameRate * updatedFrame / audioSamplesPerFrame;
+                    clip.setFramePosition((int) updatedAudioFrameIndexForVideoFrame);
+                    clip.start();
+                }
+            }
+        }
     }
 
     static void renderVideo(File rgbs, long startFrame) {
@@ -116,6 +128,7 @@ public class Player {
                     isRerender = false;
                     renderVideo(rgbs, updatedFrame);
                 }
+
                 buffer.clear();
                 channel.read(buffer);
                 buffer.rewind();
