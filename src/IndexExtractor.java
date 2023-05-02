@@ -5,6 +5,7 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class IndexExtractor {
     static int width = 480; // width of the video frames
@@ -125,19 +126,43 @@ public class IndexExtractor {
         return idxs;
     }
 
-    // #todo
-    // get the histogram-difference array for any 2 consecutive frames.
+    // get the histogram-difference array for any 2 frames.
     public static float histogramDifference(int[] prev, int[] curr) {
         // step1: get histogram bins of macro-blocks of prev frame and curr frame
         int numBins = 256;
-        int numBlocks = prev.length / (16*16);
+        int N = 16; // the macroblock size is N by N
+        int numBlocks = prev.length / (N * N);
         int[][] prevHistogram = new int[numBlocks][numBins];
         int[][] currHistogram = new int[numBlocks][numBins];
+        int A = (int) Math.ceil((double) width / N);
+        int B = (int) Math.ceil((double) height / N);
         for (int i = 0; i < numBlocks; i++) {
-            int[] prevBlock = Arrays.copyOfRange(prev, i*16*16, (i+1)*16*16);
-            int[] currBlock = Arrays.copyOfRange(curr, i*16*16, (i+1)*16*16);
-            prevHistogram[i] = calculateHistogram(prevBlock);
-            currHistogram[i] = calculateHistogram(currBlock);
+            // #error
+            // this is not a macroblock but a line in a frame
+            // int[] prevBlock = Arrays.copyOfRange(prev, i * 16 * 16, (i + 1) * 16 * 16);
+            // int[] currBlock = Arrays.copyOfRange(curr, i * 16 * 16, (i + 1) * 16 * 16);
+
+            // #todo
+            // check my implementation:
+            int[] prevBlock = new int[N * N];
+            int[] currBlock = new int[N * N];
+            int base_row = i / A;
+            int base_col = i % A;
+            for (int ii = 0; ii < N; ii++) {
+                if (base_row + ii >= height) {
+                    break;
+                }
+                for (int jj = 0; jj < N; jj++) {
+                    if (base_col + jj >= width) {
+                        break;
+                    }
+                    int idx = (base_row + ii) * width + (base_col + jj);
+                    prevBlock[ii * N + jj] = prev[idx];
+                    currBlock[ii * N + jj] = curr[idx];
+                }
+            }
+            prevHistogram[i] = calculateHistogram(prevBlock, numBins);
+            currHistogram[i] = calculateHistogram(currBlock, numBins);
         }
 
 
@@ -151,11 +176,11 @@ public class IndexExtractor {
         return averageDifference;
     }
 
-    private static int[] calculateHistogram(int[] block) {
-        int numBins = 256;
+    private static int[] calculateHistogram(int[] block, int numBins) {
+//        int numBins = 256;
         int[] histogram = new int[numBins];
         for (int i = 0; i < block.length; i++) {
-            histogram[block[i]]++;
+            histogram[block[i] * (numBins - 1) / 256]++;
         }
         return histogram;
     }
@@ -168,8 +193,7 @@ public class IndexExtractor {
         }
         return difference;
     }
-        // it is the 3rd measurements mentioned in 1994.pdf 3.1
-
+    // it is the 3rd measurements mentioned in 1994.pdf 3.1
 
 
     // extract luminance(0-255) from RGB;
