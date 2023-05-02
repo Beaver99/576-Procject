@@ -12,9 +12,14 @@ import javax.swing.JSplitPane;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
+import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
 
 public class Player {
     static final int windowHeight = 480;
@@ -41,6 +46,9 @@ public class Player {
         
         label.setPreferredSize(new Dimension(videoWidth, videoHeight));
         panel1.setLayout(new BoxLayout(panel1, BoxLayout.PAGE_AXIS));
+        for (Index i : idxs) {
+            panel1.add(createButton(i));
+        }
         
         frame.add(splitPane);
         frame.pack();
@@ -100,5 +108,38 @@ public class Player {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private static int sceneCount = 0;
+    private static int shotCount = 0;
+    private static int subshotCount = 0;
+    static JButton createButton(Index index) {
+        JButton button = new JButton();
+        button.setBorderPainted(false);
+        button.addActionListener(e -> {
+        });
+
+        switch (index.level) {
+            case scene:
+                sceneCount++;
+                shotCount = 0;
+                subshotCount = 0;
+                button.setText("Scene " + sceneCount);
+                button.setBorder(BorderFactory.createEmptyBorder(0, 10, 5, 5));
+                break;
+            case shot:
+                shotCount++;
+                subshotCount = 0;
+                button.setText("Shot " + shotCount);
+                button.setBorder(BorderFactory.createEmptyBorder(0, 20, 5, 5));
+                break;
+            case subshot:
+                subshotCount++;
+                button.setText("Subshot " + subshotCount);
+                button.setBorder(BorderFactory.createEmptyBorder(0, 40, 5, 5));
+                break;
+        }
+        
+        return button;
     }
 }
