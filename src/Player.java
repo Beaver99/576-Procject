@@ -12,9 +12,6 @@ import javax.swing.JSplitPane;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.Insets;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -34,6 +31,8 @@ public class Player {
     static JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panel1, panel2);
 
     static Thread videoThread;
+    static long updatedFrame = 0;
+    static boolean isRerender = false;
 
     public static void play(File rgbs, File audio, ArrayList<Index> idxs) {
         // create the JFrame and JLabel to display the video
@@ -78,6 +77,10 @@ public class Player {
             }
 
             while (currentFrame < numFrames) {
+                if (isRerender) {
+                    isRerender = false;
+                    renderVideo(rgbs, audio, updatedFrame);
+                }
                 buffer.clear();
                 channel.read(buffer);
                 buffer.rewind();
@@ -117,6 +120,8 @@ public class Player {
         JButton button = new JButton();
         button.setBorderPainted(false);
         button.addActionListener(e -> {
+            updatedFrame = index.idx;
+            isRerender = true;
         });
 
         switch (index.level) {
