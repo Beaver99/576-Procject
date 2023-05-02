@@ -5,37 +5,61 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.awt.image.BufferedImage;
-import javax.imageio.ImageIO;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 
+import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.Color;
 import javax.swing.ImageIcon;
 
 public class Player {
-    public static void play(File rgbs, File audio, ArrayList<Index> idxs) {
-        // just a demo
-        int width = 480; // width of the video frames
-        int height = 270; // height of the video frames
-        int fps = 30; // frames per second of the video
-        long numFrames = rgbs.length();
+    static final int windowHeight = 480;
+    static final int windowWidth = 640;
+    static final int videoHeight = 270;
+    static final int videoWidth = 480;
 
+    static JFrame frame = new JFrame();
+    static JLabel label = new JLabel();
+    static Thread videoThread;
+
+    public static void play(File rgbs, File audio, ArrayList<Index> idxs) {
         // create the JFrame and JLabel to display the video
-        JFrame frame = new JFrame("Video Display");
+        frame.setTitle("Video Player");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(new Dimension(width, height));
+        frame.setSize(new Dimension(windowWidth, windowHeight));
+        frame.setMinimumSize(new Dimension(windowWidth, windowHeight));
+        frame.setLayout(new BorderLayout());
         frame.setVisible(true);
-        JLabel label = new JLabel();
-        label.setPreferredSize(new Dimension(width, height));
+        
+        label.setPreferredSize(new Dimension(windowWidth, windowHeight));
         frame.add(label);
+        frame.pack();
+
+        videoThread = new Thread(() -> {
+            renderVideo(rgbs, audio, 0);
+        });
+        videoThread.start();
+    }
+
+    static void renderVideo(File rgbs, File audio, long startFrame) {
+        int width = videoWidth;
+        int height = videoHeight;
+        int fps = 30;
+        long numFrames = rgbs.length() / (height * width * 3);
 
         // read the video file and display each frame
         try {
             RandomAccessFile raf = new RandomAccessFile(rgbs, "r");
             FileChannel channel = raf.getChannel();
-            ByteBuffer buffer = ByteBuffer.allocate(width * height * 3);
-            for (int i = 0; i < numFrames; i++) {
+            ByteBuffer buffer = ByteBuffer.allocate(height * width * 3);
+            long currentFrame = 0;
+
+            if (currentFrame < startFrame) {
+                raf.seek(startFrame * height * width * 3);
+                currentFrame = startFrame;
+            }
+
+            while (currentFrame < numFrames) {
                 buffer.clear();
                 channel.read(buffer);
                 buffer.rewind();
@@ -57,6 +81,7 @@ public class Player {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+                currentFrame++;
             }
             channel.close();
             raf.close();
