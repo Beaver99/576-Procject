@@ -7,9 +7,13 @@ import java.util.ArrayList;
 import java.awt.image.BufferedImage;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JSplitPane;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+
+import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 
 public class Player {
@@ -20,6 +24,10 @@ public class Player {
 
     static JFrame frame = new JFrame();
     static JLabel label = new JLabel();
+    static JPanel panel1 = new JPanel();
+    static JPanel panel2 = new JPanel();
+    static JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panel1, panel2);
+
     static Thread videoThread;
 
     public static void play(File rgbs, File audio, ArrayList<Index> idxs) {
@@ -31,8 +39,10 @@ public class Player {
         frame.setLayout(new BorderLayout());
         frame.setVisible(true);
         
-        label.setPreferredSize(new Dimension(windowWidth, windowHeight));
-        frame.add(label);
+        label.setPreferredSize(new Dimension(videoWidth, videoHeight));
+        panel1.setLayout(new BoxLayout(panel1, BoxLayout.PAGE_AXIS));
+        
+        frame.add(splitPane);
         frame.pack();
 
         videoThread = new Thread(() -> {
@@ -74,8 +84,10 @@ public class Player {
                     }
                 }
                 label.setIcon(new ImageIcon(image));
-                frame.validate();
-                frame.repaint();
+                panel2.add(label);
+                panel2.validate();
+                panel2.repaint();
+
                 try {
                     Thread.sleep(1000 / fps);
                 } catch (InterruptedException e) {
