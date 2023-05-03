@@ -127,9 +127,7 @@ public class IndexExtractor {
             T1 = 0.0217f;
             T2 = 0.0211f;
             T3 = 0.0205f;
-
-            System.out.println(T1 + " " + T2 + " " + T3);
-
+            
             // step 2
             var isSubshotAllowed = false;
             for (long i = 0; i < numFrames; i++) {
@@ -158,7 +156,6 @@ public class IndexExtractor {
                     float t1 = histogramDifference(prev_Scene, currFrame);
                     if (t1 >= T1) {
                         idxs.add(new Index(i, Level.scene));
-                        System.out.println(i + " Scene");
                         System.arraycopy(currFrame, 0, prev_Scene, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
@@ -169,7 +166,6 @@ public class IndexExtractor {
 
                     if (histogramDifference(prev_Shot, currFrame) >= T2) {
                         idxs.add(new Index(i, Level.shot));
-                        System.out.println(i + " shot");
                         System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
                         prev_Cut_idx = i;
@@ -179,7 +175,6 @@ public class IndexExtractor {
 
                     if (isSubshotAllowed) {
                         if (histogramDifference(prev_Subshot, currFrame) >= T3) {
-                            System.out.println(i + " subshot");
                             idxs.add(new Index(i, Level.subshot));
                             System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
                             prev_Cut_idx = i;
