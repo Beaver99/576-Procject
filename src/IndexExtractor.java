@@ -1,3 +1,5 @@
+import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -5,6 +7,7 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class IndexExtractor {
     static int width = 480; // width of the video frames
@@ -43,6 +46,32 @@ public class IndexExtractor {
         return idxs;
     }
 
+    static float getThreshold(BufferedImage image, int percentile) {
+        int[] histogram = new int[256];
+        int pixelCount = image.getWidth() * image.getHeight();
+
+        // Calculate the histogram of pixel intensities
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                Color color = new Color(image.getRGB(x, y));
+                int lum = rgb2lum(color.getRed(), color.getGreen(), color.getBlue());
+                histogram[lum]++;
+            }
+        }
+
+        // Determine the pixel intensity corresponding to the given percentile
+        int sum = 0;
+        for (int i = 0; i < histogram.length; i++) {
+            sum += histogram[i];
+            if (sum >= pixelCount * percentile / 100.0) {
+                return i / 255.0f;
+            }
+        }
+
+        // If the given percentile is too high, return the maximum pixel intensity
+        return 1.0f;
+    }
+
     public static ArrayList<Index> extractIndex(File rgbs, File audio) {
         ArrayList<Index> idxs = new ArrayList<>();
 
@@ -60,9 +89,14 @@ public class IndexExtractor {
             // step 1 #todo
             // get thresholds T1 T2 T3 using statistical analysis
             // or google a known threshold set
-            float T1 = 0.85F;
-            float T2 = 0.5F;
-            float T3 = 0.3F;
+            BufferedImage firstFrame = ImageIO.read(rgbs);
+            float T1 = getThreshold(firstFrame, 85);
+            float T2 = getThreshold(firstFrame, 50);
+            float T3 = getThreshold(firstFrame, 30);
+
+//            float T1 = 0.85F;
+//            float T2 = 0.5F;
+//            float T3 = 0.3F;
 
             // step 2
             for (long i = 0; i < numFrames; i++) {
