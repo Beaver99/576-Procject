@@ -7,6 +7,7 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
+import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 
 public class IndexExtractor {
@@ -75,9 +76,6 @@ public class IndexExtractor {
     public static ArrayList<Index> extractIndex(File rgbs, File audio) {
         ArrayList<Index> idxs = new ArrayList<>();
 
-        int width = 352;
-        int height = 288;
-
         long numFrames = rgbs.length();
         long minimal_interval = numFrames / 1000;
 
@@ -89,21 +87,43 @@ public class IndexExtractor {
             channel = raf.getChannel();
             buffer = ByteBuffer.allocate(width * height * 3);
 
-            // step 1 #todo
+            // step 1
             // get thresholds T1 T2 T3 using statistical analysis
-            // or google a known threshold set
-            BufferedImage firstFrame = ImageIO.read(rgbs);
-            if (firstFrame == null) {
-                System.out.println("is null!!!!!!");
-            }
-            float T1 = getThreshold(firstFrame, 60);
-            float T2 = getThreshold(firstFrame, 40);
-            float T3 = getThreshold(firstFrame, 20);
-            System.out.println(T1 + " " + T2 + " " + T3);
+            float T1 = 0f;
+            float T2 = 0f;
+            float T3 = 0f;
 
-//            float T1 = 0.85F;
-//            float T2 = 0.5F;
-//            float T3 = 0.3F;
+            BufferedImage firstFrame = null;
+            byte[] bytes = new byte[width * height * 3];
+            int sampleCount = 300;
+            for (long i = 0; i < sampleCount; i++) {
+                long pos = ((long) width * height * 3) * i;
+//                System.out.println(raf.length() + " " + numFrames + " " + pos + " " + i);
+                raf.seek(pos);
+                raf.read(bytes);
+
+                firstFrame = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        int r = bytes[(y * width + x) * 3] & 0xff;
+                        int g = bytes[(y * width + x) * 3 + 1] & 0xff;
+                        int b = bytes[(y * width + x) * 3 + 2] & 0xff;
+                        int color = (r << 16) | (g << 8) | b;
+                        firstFrame.setRGB(x, y, color);
+                    }
+                }
+
+                // use the BufferedImage object as needed
+                T1 += getThreshold(firstFrame, 40);
+                T2 += getThreshold(firstFrame, 35);
+                T3 += getThreshold(firstFrame, 30);
+
+            }
+
+            T1 /= sampleCount;
+            T2 /= sampleCount;
+            T3 /= sampleCount;
+            System.out.println(T1 + " " + T2 + " " + T3);
 
             // step 2
             for (long i = 0; i < numFrames; i++) {
@@ -120,10 +140,14 @@ public class IndexExtractor {
                     }
                 }
 
-                if (i - prev_Cut_idx >= minimal_interval && i != 0) {
+                if (i != 0) {
                     // compare hDiff with 3 thresholds
-                    if (histogramDifference(prev_Scene, currFrame) >= T1) {
+                    // #todo histogramDifference() always returns 0.0, please check why
+                    float t1 = histogramDifference(prev_Scene, currFrame);
+                    System.out.println(t1);
+                    if (t1 >= T1) {
                         idxs.add(new Index(i, Level.scene));
+                        System.out.println(i + " Scene");
                         System.arraycopy(currFrame, 0, prev_Scene, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
@@ -132,16 +156,19 @@ public class IndexExtractor {
 
                     if (histogramDifference(prev_Shot, currFrame) >= T2) {
                         idxs.add(new Index(i, Level.shot));
+                        System.out.println(i + " shot");
                         System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
                         continue;
                     }
 
                     if (histogramDifference(prev_Subshot, currFrame) >= T3) {
+                        System.out.println(i + " subshot");
                         idxs.add(new Index(i, Level.subshot));
                         System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
                     }
-                } else {
+                }
+                if (i == 0) {
                     idxs.add(new Index(i, Level.scene));
                     System.arraycopy(currFrame, 0, prev_Scene, 0, currFrame.length);
                     System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
@@ -212,7 +239,7 @@ public class IndexExtractor {
             float blockDifference = calculateBlockDifference(prevHistogram[i], currHistogram[i]);
             totalDifference += blockDifference;
         }
-        float averageDifference = totalDifference / numBlocks;
+        float averageDifference = totalDifference / (numBlocks * N * N);
         return averageDifference;
     }
 
