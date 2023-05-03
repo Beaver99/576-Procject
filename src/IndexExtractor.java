@@ -46,7 +46,7 @@ public class IndexExtractor {
         return idxs;
     }
 
-    static float getThreshold(BufferedImage image, int percentile) {
+    public static float getThreshold(BufferedImage image, int percentile) {
         int[] histogram = new int[256];
         int pixelCount = image.getWidth() * image.getHeight();
 
@@ -79,7 +79,7 @@ public class IndexExtractor {
         int height = 288;
 
         long numFrames = rgbs.length();
-        long minimal_interval = numFrames / 200;
+        long minimal_interval = numFrames / 1000;
 
         RandomAccessFile raf = null;
         FileChannel channel = null;
@@ -93,9 +93,13 @@ public class IndexExtractor {
             // get thresholds T1 T2 T3 using statistical analysis
             // or google a known threshold set
             BufferedImage firstFrame = ImageIO.read(rgbs);
-            float T1 = getThreshold(firstFrame, 85);
-            float T2 = getThreshold(firstFrame, 50);
-            float T3 = getThreshold(firstFrame, 30);
+            if (firstFrame == null) {
+                System.out.println("is null!!!!!!");
+            }
+            float T1 = getThreshold(firstFrame, 60);
+            float T2 = getThreshold(firstFrame, 40);
+            float T3 = getThreshold(firstFrame, 20);
+            System.out.println(T1 + " " + T2 + " " + T3);
 
 //            float T1 = 0.85F;
 //            float T2 = 0.5F;
