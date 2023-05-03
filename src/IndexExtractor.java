@@ -13,14 +13,9 @@ import java.util.Arrays;
 public class IndexExtractor {
     static int width = 480; // width of the video frames
     static int height = 270; // height of the video frames
-    static int fps = 30; // frames per second of the video
+    static int fps = 15; // frames per second of the video
 
     static long prev_Cut_idx = 0;
-    static int[] prev_Scene = new int[width * height];
-    static int[] prev_Shot = new int[width * height];
-    static int[] prev_Subshot = new int[width * height];
-    static int[] currFrame = new int[width * height];
-
 
     public static ArrayList<Index> mockExtractIndex(File rgbs, File audio) {
         // for testing
@@ -74,10 +69,14 @@ public class IndexExtractor {
     }
 
     public static ArrayList<Index> extractIndex(File rgbs, File audio) {
+        int[] prev_Scene = new int[width * height];
+        int[] prev_Shot = new int[width * height];
+        int[] prev_Subshot = new int[width * height];
+        int[] currFrame = new int[width * height];
         ArrayList<Index> idxs = new ArrayList<>();
 
-        long numFrames = rgbs.length();
-        long minimal_interval = numFrames / 1000;
+        long numFrames = rgbs.length() / (height * width * 3);
+        long minimal_interval = 30;
 
         RandomAccessFile raf = null;
         FileChannel channel = null;
@@ -93,64 +92,78 @@ public class IndexExtractor {
             float T2 = 0f;
             float T3 = 0f;
 
-            BufferedImage firstFrame = null;
-            byte[] bytes = new byte[width * height * 3];
-            int sampleCount = 300;
-            for (long i = 0; i < sampleCount; i++) {
-                long pos = ((long) width * height * 3) * i;
-//                System.out.println(raf.length() + " " + numFrames + " " + pos + " " + i);
-                raf.seek(pos);
-                raf.read(bytes);
+            // this is our threshold selection algo, we use it to get the best performed thresholds
+//            BufferedImage firstFrame = null;
+//            byte[] bytes = new byte[width * height * 3];
+//            int sampleCount = 300;
+//            for (long i = 0; i < sampleCount; i++) {
+//                long pos = ((long) width * height * 3) * i;
+////                System.out.println(raf.length() + " " + numFrames + " " + pos + " " + i);
+//                raf.seek(pos);
+//                raf.read(bytes);
+//
+//                firstFrame = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+//                for (int y = 0; y < height; y++) {
+//                    for (int x = 0; x < width; x++) {
+//                        int r = bytes[(y * width + x) * 3] & 0xff;
+//                        int g = bytes[(y * width + x) * 3 + 1] & 0xff;
+//                        int b = bytes[(y * width + x) * 3 + 2] & 0xff;
+//                        int color = (r << 16) | (g << 8) | b;
+//                        firstFrame.setRGB(x, y, color);
+//                    }
+//                }
+//
+//                // use the BufferedImage object as needed
+//                T1 += getThreshold(firstFrame, 33);
+//                T2 += getThreshold(firstFrame, 32);
+//                T3 += getThreshold(firstFrame, 31);
+//
+//            }
+//
+//            T1 /= sampleCount;
+//            T2 /= sampleCount;
+//            T3 /= sampleCount;
 
-                firstFrame = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-                for (int y = 0; y < height; y++) {
-                    for (int x = 0; x < width; x++) {
-                        int r = bytes[(y * width + x) * 3] & 0xff;
-                        int g = bytes[(y * width + x) * 3 + 1] & 0xff;
-                        int b = bytes[(y * width + x) * 3 + 2] & 0xff;
-                        int color = (r << 16) | (g << 8) | b;
-                        firstFrame.setRGB(x, y, color);
-                    }
-                }
+            T1 = 0.0217f;
+            T2 = 0.0211f;
+            T3 = 0.0205f;
 
-                // use the BufferedImage object as needed
-                T1 += getThreshold(firstFrame, 40);
-                T2 += getThreshold(firstFrame, 35);
-                T3 += getThreshold(firstFrame, 30);
-
-            }
-
-            T1 /= sampleCount;
-            T2 /= sampleCount;
-            T3 /= sampleCount;
             System.out.println(T1 + " " + T2 + " " + T3);
 
             // step 2
+            var isSubshotAllowed = false;
             for (long i = 0; i < numFrames; i++) {
-                buffer.clear();
-                channel.read(buffer);
-                buffer.rewind();
-                for (int y = 0; y < height; y++) {
-                    for (int x = 0; x < width; x++) {
-                        int r = buffer.get() & 0xff;
-                        int g = buffer.get() & 0xff;
-                        int b = buffer.get() & 0xff;
+                if (i == 0 || i - prev_Cut_idx >= minimal_interval) {
+                    buffer.clear();
+                    channel.read(buffer);
+                    buffer.rewind();
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
+                            int r = buffer.get() & 0xff;
+                            int g = buffer.get() & 0xff;
+                            int b = buffer.get() & 0xff;
 
-                        currFrame[y * width + x] = rgb2lum(r, g, b);
+                            int lum = rgb2lum(r, g, b);
+                            currFrame[y * width + x] = lum;
+                        }
                     }
                 }
 
-                if (i != 0) {
+
+                if (i - prev_Cut_idx >= minimal_interval && i != 0) {
                     // compare hDiff with 3 thresholds
-                    // #todo histogramDifference() always returns 0.0, please check why
+                    if (i % 1000 == 0) {
+                        System.out.println(i);
+                    }
                     float t1 = histogramDifference(prev_Scene, currFrame);
-                    System.out.println(t1);
                     if (t1 >= T1) {
                         idxs.add(new Index(i, Level.scene));
                         System.out.println(i + " Scene");
                         System.arraycopy(currFrame, 0, prev_Scene, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                        prev_Cut_idx = i;
+                        isSubshotAllowed = false;
                         continue;
                     }
 
@@ -159,14 +172,20 @@ public class IndexExtractor {
                         System.out.println(i + " shot");
                         System.arraycopy(currFrame, 0, prev_Shot, 0, currFrame.length);
                         System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                        prev_Cut_idx = i;
+                        isSubshotAllowed = true;
                         continue;
                     }
 
-                    if (histogramDifference(prev_Subshot, currFrame) >= T3) {
-                        System.out.println(i + " subshot");
-                        idxs.add(new Index(i, Level.subshot));
-                        System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                    if (isSubshotAllowed) {
+                        if (histogramDifference(prev_Subshot, currFrame) >= T3) {
+                            System.out.println(i + " subshot");
+                            idxs.add(new Index(i, Level.subshot));
+                            System.arraycopy(currFrame, 0, prev_Subshot, 0, currFrame.length);
+                            prev_Cut_idx = i;
+                        }
                     }
+
                 }
                 if (i == 0) {
                     idxs.add(new Index(i, Level.scene));
@@ -196,7 +215,7 @@ public class IndexExtractor {
     // get the histogram-difference array for any 2 frames.
     public static float histogramDifference(int[] prev, int[] curr) {
         // step1: get histogram bins of macro-blocks of prev frame and curr frame
-        int numBins = 256;
+        int numBins = 64;
         int N = 16; // the macroblock size is N by N
         int numBlocks = prev.length / (N * N);
         int[][] prevHistogram = new int[numBlocks][numBins];
@@ -209,12 +228,10 @@ public class IndexExtractor {
             // int[] prevBlock = Arrays.copyOfRange(prev, i * 16 * 16, (i + 1) * 16 * 16);
             // int[] currBlock = Arrays.copyOfRange(curr, i * 16 * 16, (i + 1) * 16 * 16);
 
-            // #todo
-            // check my implementation:
             int[] prevBlock = new int[N * N];
             int[] currBlock = new int[N * N];
-            int base_row = i / A;
-            int base_col = i % A;
+            int base_row = i / A * N;
+            int base_col = i % A * N;
             for (int ii = 0; ii < N; ii++) {
                 if (base_row + ii >= height) {
                     break;
@@ -226,6 +243,9 @@ public class IndexExtractor {
                     int idx = (base_row + ii) * width + (base_col + jj);
                     prevBlock[ii * N + jj] = prev[idx];
                     currBlock[ii * N + jj] = curr[idx];
+//                    if (idx % 113 == 0) {
+//                        System.out.println(idx + " " + prev[idx] + " " + curr[idx]);
+//                    }
                 }
             }
             prevHistogram[i] = calculateHistogram(prevBlock, numBins);
@@ -239,7 +259,7 @@ public class IndexExtractor {
             float blockDifference = calculateBlockDifference(prevHistogram[i], currHistogram[i]);
             totalDifference += blockDifference;
         }
-        float averageDifference = totalDifference / (numBlocks * N * N);
+        float averageDifference = totalDifference / (numBlocks * N * N * numBins);
         return averageDifference;
     }
 
@@ -268,18 +288,5 @@ public class IndexExtractor {
     public static int rgb2lum(int r, int g, int b) {
         return (int) Math.floor(0.299 * r + 0.587 * g + 0.114 * b);
     }
-
-//    // rgb to HSV/LUV color space, not decided yet
-//    public static int[] rgb2luv(int r, int g, int b) {
-//        // rgb -> xyz
-////        [ X ]   [  0.412453  0.357580  0.180423 ]   [ R ]
-////        [ Y ] = [  0.212671  0.715160  0.072169 ] * [ G ]
-////        [ Z ]   [  0.019334  0.119193  0.950227 ]   [ B ]
-//
-//        // xyz -> luv
-//        // see https://en.wikipedia.org/wiki/CIELUV
-//
-//        return new int[]{0, 0, 0};
-//    }
 
 }
