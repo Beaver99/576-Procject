@@ -127,7 +127,7 @@ public class IndexExtractor {
             T1 = 0.0217f;
             T2 = 0.0211f;
             T3 = 0.0205f;
-            
+
             // step 2
             var isSubshotAllowed = false;
             for (long i = 0; i < numFrames; i++) {
@@ -150,9 +150,6 @@ public class IndexExtractor {
 
                 if (i - prev_Cut_idx >= minimal_interval && i != 0) {
                     // compare hDiff with 3 thresholds
-                    if (i % 1000 == 0) {
-                        System.out.println(i);
-                    }
                     float t1 = histogramDifference(prev_Scene, currFrame);
                     if (t1 >= T1) {
                         idxs.add(new Index(i, Level.scene));
