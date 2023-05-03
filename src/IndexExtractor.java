@@ -75,6 +75,9 @@ public class IndexExtractor {
     public static ArrayList<Index> extractIndex(File rgbs, File audio) {
         ArrayList<Index> idxs = new ArrayList<>();
 
+        int width = 352;
+        int height = 288;
+
         long numFrames = rgbs.length();
         long minimal_interval = numFrames / 200;
 
