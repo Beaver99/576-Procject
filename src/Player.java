@@ -31,17 +31,22 @@ public class Player {
 
     static JFrame frame = new JFrame();
     static JLabel label = new JLabel();
-    static JPanel panel1 = new JPanel();
-    static JPanel panel2 = new JPanel();
-    static JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panel1, panel2);
+    static JPanel scenePanel = new JPanel();
+    static JPanel videoPanel = new JPanel();
+    static JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scenePanel, videoPanel);
+
+    static JButton playButton, pauseButton, stopButton;
+    static JPanel controlPanel;
 
     static Thread videoThread, audioThread;
     static long updatedFrame = 0;
     static Clip clip;
     static AudioInputStream audioInputStream;
-    static boolean isRerender = false;
+    static boolean rerenderVideo = false, rerenderAudio = false;
 
-    public static void play(File rgbs, File audio, ArrayList<Index> idxs) throws IOException, LineUnavailableException {
+    static boolean isPaused, isStopped;
+
+    public static void display(File rgbs, File audio, ArrayList<Index> idxs) throws IOException, LineUnavailableException {
         // create the JFrame and JLabel to display the video
         frame.setTitle("Video Player");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -51,21 +56,57 @@ public class Player {
         frame.setVisible(true);
         
         label.setPreferredSize(new Dimension(videoWidth, videoHeight));
-        panel1.setLayout(new BoxLayout(panel1, BoxLayout.PAGE_AXIS));
+        scenePanel.setLayout(new BoxLayout(scenePanel, BoxLayout.PAGE_AXIS));
         for (Index i : idxs) {
-            panel1.add(createButton(i));
+            scenePanel.add(createButton(i));
         }
+
+        controlPanel = new JPanel();
+        playButton = new JButton("Play");
+        playButton.addActionListener(e -> {
+            if (isStopped) {
+                rerenderVideo = true;
+                rerenderAudio = true;
+                isStopped = false;
+            }
+            if(isPaused) {
+                rerenderAudio = true;
+                isPaused = false;
+            } 
+        });
+        
+        pauseButton = new JButton("Pause");
+        pauseButton.addActionListener(e -> {
+            isPaused = true;
+        });
+
+        stopButton = new JButton("Stop");
+        stopButton.addActionListener(e -> {
+            isStopped = true;
+        });
+
+        controlPanel.add(playButton);
+        controlPanel.add(pauseButton);
+        controlPanel.add(stopButton);
+        
+        videoPanel.setLayout(new BoxLayout(videoPanel, BoxLayout.Y_AXIS));
+        videoPanel.add(label);
+        videoPanel.add(controlPanel);
+
+        isPaused = false;
+        isStopped = false;
+        updatedFrame = 0;
 
         frame.add(splitPane);
         frame.pack();
 
         videoThread = new Thread(() -> {
-            renderVideo(rgbs, 0);
+            renderVideo(rgbs, updatedFrame);
         });
 
         audioThread = new Thread(() -> {
             try {
-                renderAudio(audio, 0);
+                renderAudio(audio, updatedFrame);
             } catch (LineUnavailableException | IOException | UnsupportedAudioFileException e) {
                 e.printStackTrace();
             }
@@ -94,12 +135,18 @@ public class Player {
         clip.start();
     
         while (clip != null) {
-            if (clip.getFramePosition() > 0) {
-                if (isRerender) {
+            if (isStopped || isPaused) {
+                long currentFrame = clip.getFramePosition();
+                clip.stop();
+
+                if (isPaused) {
+                    updatedFrame = currentFrame;
+                }
+            } else if (clip.getFramePosition() > 0) {
+                if (rerenderAudio) {
+                    rerenderAudio = false;
                     clip.stop();
-                    long updatedAudioFrameIndexForVideoFrame = audioFrameRate / videoFrameRate * updatedFrame / audioSamplesPerFrame;
-                    clip.setFramePosition((int) updatedAudioFrameIndexForVideoFrame);
-                    clip.start();
+                    renderAudio(audio, updatedFrame);
                 }
             }
         }
@@ -124,41 +171,43 @@ public class Player {
             }
 
             while (currentFrame < numFrames) {
-                if (isRerender) {
-                    isRerender = false;
+                if (rerenderVideo) {
+                    rerenderVideo = false;
                     renderVideo(rgbs, updatedFrame);
                 }
 
-                buffer.clear();
-                channel.read(buffer);
-                buffer.rewind();
-                BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-                for (int y = 0; y < height; y++) {
-                    for (int x = 0; x < width; x++) {
-                        int r = buffer.get() & 0xff;
-                        int g = buffer.get() & 0xff;
-                        int b = buffer.get() & 0xff;
-                        int color = (r << 16) | (g << 8) | b;
-                        image.setRGB(x, y, color);
+                if (!isPaused && !isStopped && !Thread.interrupted()) {
+                    buffer.clear();
+                    channel.read(buffer);
+                    buffer.rewind();
+                    BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
+                            int r = buffer.get() & 0xff;
+                            int g = buffer.get() & 0xff;
+                            int b = buffer.get() & 0xff;
+                            int color = (r << 16) | (g << 8) | b;
+                            image.setRGB(x, y, color);
+                        }
                     }
+                    label.setIcon(new ImageIcon(image));
+                    // videoPanel.add(label);
+                    videoPanel.validate();
+                    videoPanel.repaint();
+    
+                    try {
+                        Thread.sleep(1000 / fps);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    currentFrame++;
                 }
-                label.setIcon(new ImageIcon(image));
-                panel2.add(label);
-                panel2.validate();
-                panel2.repaint();
-
-                try {
-                    Thread.sleep(1000 / fps);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                currentFrame++;
             }
             channel.close();
             raf.close();
         } catch (IOException e) {
             e.printStackTrace();
-        }        
+        }
     }
 
     private static int sceneCount = 0;
@@ -169,7 +218,8 @@ public class Player {
         button.setBorderPainted(false);
         button.addActionListener(e -> {
             updatedFrame = index.idx;
-            isRerender = true;
+            rerenderVideo = true;
+            rerenderAudio = true;
         });
 
         switch (index.level) {
@@ -177,18 +227,18 @@ public class Player {
                 sceneCount++;
                 shotCount = 0;
                 subshotCount = 0;
-                button.setText("Scene " + sceneCount);
+                button.setText("Scene " + sceneCount + " (" + index.idx + ")");
                 button.setBorder(BorderFactory.createEmptyBorder(0, 10, 5, 5));
                 break;
             case shot:
                 shotCount++;
                 subshotCount = 0;
-                button.setText("Shot " + shotCount);
+                button.setText("Shot " + shotCount + " (" + index.idx + ")");
                 button.setBorder(BorderFactory.createEmptyBorder(0, 20, 5, 5));
                 break;
             case subshot:
                 subshotCount++;
-                button.setText("Subshot " + subshotCount);
+                button.setText("Subshot " + subshotCount + " (" + index.idx + ")");
                 button.setBorder(BorderFactory.createEmptyBorder(0, 40, 5, 5));
                 break;
         }
