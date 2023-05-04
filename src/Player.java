@@ -274,8 +274,11 @@ public class Player {
         button.addActionListener(e -> {
             // currUpdatedFrame = index.idx;
             shotStartFrame = index.idx;
+            currFrameUpdate = false;
             rerenderVideo = true;
             rerenderAudio = true;
+            isStopped = false;
+            isPaused = false;
         });
 
         switch (index.level) {
