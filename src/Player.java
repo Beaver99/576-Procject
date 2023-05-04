@@ -38,20 +38,21 @@ public class Player {
     static JPanel scenePanel;
     static JLabel label;
 
-    static JPanel videoPanel;
-    static JPanel controlPanel;
+    static JPanel videoPanel, controlPanel;
     static JButton playButton, pauseButton, stopButton;
 
-
     static Thread videoThread, audioThread;
-    static long updatedFrame;
+    static long currUpdatedFrame, shotStartFrame;
     static Clip clip;
     static AudioInputStream audioInputStream;
-    static boolean rerenderVideo;
-    static boolean rerenderAudio;
+    static boolean rerenderVideo, rerenderAudio, currFrameUpdate;
     static boolean isPaused, isStopped;
 
+    static ArrayList<Index> mIndexes;
+
     public static void display(File rgbs, File audio, ArrayList<Index> idxs) throws IOException, LineUnavailableException, UnsupportedAudioFileException {
+        mIndexes = idxs;
+
         frame = new JFrame();
         frame.setTitle("Video Player");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -59,7 +60,9 @@ public class Player {
         frame.setMinimumSize(new Dimension(windowWidth, windowHeight));
         frame.setLayout(new BorderLayout());
 
-        updatedFrame = 0;
+        currUpdatedFrame = 0;
+        shotStartFrame = 0;
+        currFrameUpdate = false;
         rerenderAudio = false;
         rerenderVideo = false;
         
@@ -102,7 +105,7 @@ public class Player {
         pauseButton = new JButton("Pause");
         pauseButton.addActionListener(e -> {
             isPaused = true;
-            updatedFrame = clip.getFramePosition();
+            currFrameUpdate = true;
         });
 
         stopButton = new JButton("Stop");
@@ -126,12 +129,12 @@ public class Player {
         frame.setVisible(true);
 
         videoThread = new Thread(() -> {
-            renderVideo(rgbs, updatedFrame);
+            renderVideo(rgbs, shotStartFrame);
         });
 
         audioThread = new Thread(() -> {
             try {
-                renderAudio(audio, updatedFrame);
+                renderAudio(audio, shotStartFrame);
             } catch (LineUnavailableException | IOException | UnsupportedAudioFileException e) {
                 e.printStackTrace();
             }
@@ -179,7 +182,12 @@ public class Player {
                     audioInputStream = AudioSystem.getAudioInputStream(audio);
                     clip = AudioSystem.getClip();
 
-                    audioFrameIndexForVideoFrame = calculateAudioframe(updatedFrame);
+                    if (currFrameUpdate) {
+                        currFrameUpdate = false;
+                        audioFrameIndexForVideoFrame = calculateAudioframe(currUpdatedFrame);
+                    } else {
+                        audioFrameIndexForVideoFrame = calculateAudioframe(shotStartFrame);
+                    }
                     bytesPerFrame = audioInputStream.getFormat().getFrameSize();
                     skipBytes = audioFrameIndexForVideoFrame * bytesPerFrame;
                     audioInputStream.skip(skipBytes);
@@ -187,7 +195,6 @@ public class Player {
                     clip.open(audioInputStream);
                     clip.setFramePosition((int) audioFrameIndexForVideoFrame);
                     clip.start();
-                    // renderAudio(audio, updatedFrame);
                 }
             }
         }
@@ -214,10 +221,15 @@ public class Player {
             while (currentFrame < numFrames) {
                 if (rerenderVideo) {
                     rerenderVideo = false;
-                    renderVideo(rgbs, updatedFrame);
+                    if (currFrameUpdate) {
+                        currFrameUpdate = false;
+                        renderVideo(rgbs, currUpdatedFrame);
+                    } else {
+                        renderVideo(rgbs, shotStartFrame);
+                    }
                 }
 
-                if (!isPaused && !isStopped && !Thread.interrupted()) {
+                if (!isPaused && !isStopped) {
                     buffer.clear();
                     channel.read(buffer);
                     buffer.rewind();
@@ -232,7 +244,6 @@ public class Player {
                         }
                     }
                     label.setIcon(new ImageIcon(image));
-                    // videoPanel.add(label);
                     videoPanel.validate();
                     videoPanel.repaint();
     
@@ -243,6 +254,9 @@ public class Player {
                     }
                     currentFrame++;
                 }
+
+                currUpdatedFrame = currentFrame;
+                // Update last shot frame index
             }
             channel.close();
             raf.close();
@@ -258,7 +272,8 @@ public class Player {
         JButton button = new JButton();
         button.setBorderPainted(false);
         button.addActionListener(e -> {
-            updatedFrame = index.idx;
+            // currUpdatedFrame = index.idx;
+            shotStartFrame = index.idx;
             rerenderVideo = true;
             rerenderAudio = true;
         });
