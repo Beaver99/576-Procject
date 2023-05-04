@@ -8,6 +8,7 @@ import java.awt.image.BufferedImage;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 
 import java.awt.BorderLayout;
@@ -33,7 +34,7 @@ public class Player {
     static JLabel label = new JLabel();
     static JPanel scenePanel = new JPanel();
     static JPanel videoPanel = new JPanel();
-    static JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, scenePanel, videoPanel);
+    static JSplitPane splitPane = new JSplitPane();
 
     static JButton playButton, pauseButton, stopButton;
     static JPanel controlPanel;
@@ -56,10 +57,19 @@ public class Player {
         frame.setVisible(true);
         
         label.setPreferredSize(new Dimension(videoWidth, videoHeight));
-        scenePanel.setLayout(new BoxLayout(scenePanel, BoxLayout.PAGE_AXIS));
+        label.setMinimumSize(new Dimension(videoWidth, videoHeight));
+        scenePanel.setLayout(new BoxLayout(scenePanel, BoxLayout.Y_AXIS));
         for (Index i : idxs) {
             scenePanel.add(createButton(i));
         }
+
+        JScrollPane scrollPane = new JScrollPane(scenePanel);
+        scrollPane.setPreferredSize(new Dimension(220, 400));
+        scrollPane.setMinimumSize(new Dimension(220, 400));
+        frame.getContentPane().add(scrollPane, BorderLayout.WEST);
+        scrollPane.revalidate();
+        scrollPane.repaint();
+
 
         controlPanel = new JPanel();
         playButton = new JButton("Play");
@@ -90,6 +100,8 @@ public class Player {
         controlPanel.add(stopButton);
         
         videoPanel.setLayout(new BoxLayout(videoPanel, BoxLayout.Y_AXIS));
+        label.setPreferredSize(new Dimension(600, 350));
+        label.setMinimumSize(new Dimension(600, 350));
         videoPanel.add(label);
         videoPanel.add(controlPanel);
 
@@ -97,6 +109,8 @@ public class Player {
         isStopped = false;
         updatedFrame = 0;
 
+        splitPane.setLeftComponent(scrollPane);
+        splitPane.setRightComponent(videoPanel);
         frame.add(splitPane);
         frame.pack();
 
