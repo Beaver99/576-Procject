@@ -27,49 +27,63 @@ import javax.swing.JButton;
 public class Player {
     static final int windowHeight = 480;
     static final int windowWidth = 640;
+
     static final int videoHeight = 270;
     static final int videoWidth = 480;
 
-    static JFrame frame = new JFrame();
-    static JLabel label = new JLabel();
-    static JPanel scenePanel = new JPanel();
-    static JPanel videoPanel = new JPanel();
-    static JSplitPane splitPane = new JSplitPane();
+    static JFrame frame;
+    static JSplitPane splitPane;
 
-    static JButton playButton, pauseButton, stopButton;
+    static JScrollPane scrollPane;
+    static JPanel scenePanel;
+    static JLabel label;
+
+    static JPanel videoPanel;
     static JPanel controlPanel;
+    static JButton playButton, pauseButton, stopButton;
+
 
     static Thread videoThread, audioThread;
-    static long updatedFrame = 0;
+    static long updatedFrame;
     static Clip clip;
     static AudioInputStream audioInputStream;
-    static boolean rerenderVideo = false, rerenderAudio = false;
-
+    static boolean rerenderVideo;
+    static boolean rerenderAudio;
     static boolean isPaused, isStopped;
 
-    public static void display(File rgbs, File audio, ArrayList<Index> idxs) throws IOException, LineUnavailableException {
-        // create the JFrame and JLabel to display the video
+    public static void display(File rgbs, File audio, ArrayList<Index> idxs) throws IOException, LineUnavailableException, UnsupportedAudioFileException {
+        frame = new JFrame();
         frame.setTitle("Video Player");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(new Dimension(windowWidth, windowHeight));
         frame.setMinimumSize(new Dimension(windowWidth, windowHeight));
         frame.setLayout(new BorderLayout());
-        frame.setVisible(true);
+
+        updatedFrame = 0;
+        rerenderAudio = false;
+        rerenderVideo = false;
         
-        label.setPreferredSize(new Dimension(videoWidth, videoHeight));
-        label.setMinimumSize(new Dimension(videoWidth, videoHeight));
+        isPaused = false;
+        isStopped = false;
+        
+        scenePanel = new JPanel();
         scenePanel.setLayout(new BoxLayout(scenePanel, BoxLayout.Y_AXIS));
         for (Index i : idxs) {
             scenePanel.add(createButton(i));
         }
 
-        JScrollPane scrollPane = new JScrollPane(scenePanel);
+        scrollPane = new JScrollPane(scenePanel);
         scrollPane.setPreferredSize(new Dimension(220, 400));
         scrollPane.setMinimumSize(new Dimension(220, 400));
         frame.getContentPane().add(scrollPane, BorderLayout.WEST);
         scrollPane.revalidate();
         scrollPane.repaint();
 
+        videoPanel = new JPanel();
+        videoPanel.setLayout(new BoxLayout(videoPanel, BoxLayout.Y_AXIS));
+        label = new JLabel();
+        label.setPreferredSize(new Dimension(600, 350));
+        label.setMinimumSize(new Dimension(600, 350));
 
         controlPanel = new JPanel();
         playButton = new JButton("Play");
@@ -88,6 +102,7 @@ public class Player {
         pauseButton = new JButton("Pause");
         pauseButton.addActionListener(e -> {
             isPaused = true;
+            updatedFrame = clip.getFramePosition();
         });
 
         stopButton = new JButton("Stop");
@@ -99,20 +114,16 @@ public class Player {
         controlPanel.add(pauseButton);
         controlPanel.add(stopButton);
         
-        videoPanel.setLayout(new BoxLayout(videoPanel, BoxLayout.Y_AXIS));
-        label.setPreferredSize(new Dimension(600, 350));
-        label.setMinimumSize(new Dimension(600, 350));
         videoPanel.add(label);
         videoPanel.add(controlPanel);
 
-        isPaused = false;
-        isStopped = false;
-        updatedFrame = 0;
-
+        splitPane = new JSplitPane();
         splitPane.setLeftComponent(scrollPane);
         splitPane.setRightComponent(videoPanel);
+
         frame.add(splitPane);
         frame.pack();
+        frame.setVisible(true);
 
         videoThread = new Thread(() -> {
             renderVideo(rgbs, updatedFrame);
@@ -130,19 +141,24 @@ public class Player {
         audioThread.start();
     }
 
-    static void renderAudio(File audio, long startFrame) throws LineUnavailableException, IOException, UnsupportedAudioFileException {
-        audioInputStream = AudioSystem.getAudioInputStream(audio);
-        clip = AudioSystem.getClip();
-        
+    static long calculateAudioframe(long videoFrame) {
         long audioFrameRate = (long) audioInputStream.getFormat().getSampleRate();
-        long videoFrameIndex = startFrame;
+        long videoFrameIndex = videoFrame;
         long videoFrameRate = 30;
         int audioSamplesPerFrame = audioInputStream.getFormat().getFrameSize() / audioInputStream.getFormat().getChannels();
     
         long audioFrameIndexForVideoFrame = audioFrameRate / videoFrameRate * videoFrameIndex / audioSamplesPerFrame;
-        // long bytesPerFrame = audioInputStream.getFormat().getFrameSize();
-        // long skipBytes = audioFrameIndexForVideoFrame * bytesPerFrame;
-        // audioInputStream.skip(skipBytes);
+        return audioFrameIndexForVideoFrame;
+    }
+
+    static void renderAudio(File audio, long startFrame) throws LineUnavailableException, IOException, UnsupportedAudioFileException {
+        audioInputStream = AudioSystem.getAudioInputStream(audio);
+        clip = AudioSystem.getClip();
+
+        long audioFrameIndexForVideoFrame = calculateAudioframe(startFrame);
+        long bytesPerFrame = audioInputStream.getFormat().getFrameSize();
+        long skipBytes = audioFrameIndexForVideoFrame * bytesPerFrame;
+        audioInputStream.skip(skipBytes);
     
         clip.open(audioInputStream);
         clip.setFramePosition((int) audioFrameIndexForVideoFrame);
@@ -150,17 +166,28 @@ public class Player {
     
         while (clip != null) {
             if (isStopped || isPaused) {
-                long currentFrame = clip.getFramePosition();
                 clip.stop();
-
-                if (isPaused) {
-                    updatedFrame = currentFrame;
-                }
-            } else if (clip.getFramePosition() > 0) {
+                clip.flush();
+            } 
+            
+            if (clip.getFramePosition() >= 0 && !isPaused && !isStopped) {
                 if (rerenderAudio) {
                     rerenderAudio = false;
                     clip.stop();
-                    renderAudio(audio, updatedFrame);
+                    clip.flush();
+
+                    audioInputStream = AudioSystem.getAudioInputStream(audio);
+                    clip = AudioSystem.getClip();
+
+                    audioFrameIndexForVideoFrame = calculateAudioframe(updatedFrame);
+                    bytesPerFrame = audioInputStream.getFormat().getFrameSize();
+                    skipBytes = audioFrameIndexForVideoFrame * bytesPerFrame;
+                    audioInputStream.skip(skipBytes);
+                
+                    clip.open(audioInputStream);
+                    clip.setFramePosition((int) audioFrameIndexForVideoFrame);
+                    clip.start();
+                    // renderAudio(audio, updatedFrame);
                 }
             }
         }
