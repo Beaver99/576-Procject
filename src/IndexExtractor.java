@@ -194,72 +194,147 @@ public class IndexExtractor {
     }
 
     // get the histogram-difference array for any 2 frames.
-    public static float histogramDifference(int[] prev, int[] curr) {
-        // step1: get histogram bins of macro-blocks of prev frame and curr frame
-        int numBins = 256;
-        int N = 16; // the macroblock size is N by N
-        int numBlocks = prev.length / (N * N);
-        int[][] prevHistogram = new int[numBlocks][numBins];
-        int[][] currHistogram = new int[numBlocks][numBins];
-        int A = (int) Math.ceil((double) width / N);
-        int B = (int) Math.ceil((double) height / N);
-        for (int i = 0; i < numBlocks; i++) {
-            // #error
-            // this is not a macroblock but a line in a frame
-            // int[] prevBlock = Arrays.copyOfRange(prev, i * 16 * 16, (i + 1) * 16 * 16);
-            // int[] currBlock = Arrays.copyOfRange(curr, i * 16 * 16, (i + 1) * 16 * 16);
-
-            // #todo
-            // check my implementation:
-            int[] prevBlock = new int[N * N];
-            int[] currBlock = new int[N * N];
-            int base_row = i / A;
-            int base_col = i % A;
-            for (int ii = 0; ii < N; ii++) {
-                if (base_row + ii >= height) {
-                    break;
-                }
-                for (int jj = 0; jj < N; jj++) {
-                    if (base_col + jj >= width) {
-                        break;
-                    }
-                    int idx = (base_row + ii) * width + (base_col + jj);
-                    prevBlock[ii * N + jj] = prev[idx];
-                    currBlock[ii * N + jj] = curr[idx];
-                }
-            }
-            prevHistogram[i] = calculateHistogram(prevBlock, numBins);
-            currHistogram[i] = calculateHistogram(currBlock, numBins);
-        }
-
-
-        // step2: calculate the difference using the Block histogram difference (BH)
-        float totalDifference = 0;
-        for (int i = 0; i < numBlocks; i++) {
-            float blockDifference = calculateBlockDifference(prevHistogram[i], currHistogram[i]);
-            totalDifference += blockDifference;
-        }
-        float averageDifference = totalDifference / (numBlocks * N * N);
-        return averageDifference;
-    }
-
-    private static int[] calculateHistogram(int[] block, int numBins) {
+//    public static float histogramDifference(int[] prev, int[] curr) {
+//        // step1: get histogram bins of macro-blocks of prev frame and curr frame
 //        int numBins = 256;
-        int[] histogram = new int[numBins];
-        for (int i = 0; i < block.length; i++) {
-            histogram[block[i] * (numBins - 1) / 256]++;
+//        int N = 16; // the macroblock size is N by N
+//        int numBlocks = prev.length / (N * N);
+//        int[][] prevHistogram = new int[numBlocks][numBins];
+//        int[][] currHistogram = new int[numBlocks][numBins];
+//        int A = (int) Math.ceil((double) width / N);
+//        int B = (int) Math.ceil((double) height / N);
+//        for (int i = 0; i < numBlocks; i++) {
+//            // #error
+//            // this is not a macroblock but a line in a frame
+//            // int[] prevBlock = Arrays.copyOfRange(prev, i * 16 * 16, (i + 1) * 16 * 16);
+//            // int[] currBlock = Arrays.copyOfRange(curr, i * 16 * 16, (i + 1) * 16 * 16);
+//
+//            // #todo
+//            // check my implementation:
+//            int[] prevBlock = new int[N * N];
+//            int[] currBlock = new int[N * N];
+//            int base_row = i / A;
+//            int base_col = i % A;
+//            for (int ii = 0; ii < N; ii++) {
+//                if (base_row + ii >= height) {
+//                    break;
+//                }
+//                for (int jj = 0; jj < N; jj++) {
+//                    if (base_col + jj >= width) {
+//                        break;
+//                    }
+//                    int idx = (base_row + ii) * width + (base_col + jj);
+//                    prevBlock[ii * N + jj] = prev[idx];
+//                    currBlock[ii * N + jj] = curr[idx];
+//                }
+//            }
+//            prevHistogram[i] = calculateHistogram(prevBlock, numBins);
+//            currHistogram[i] = calculateHistogram(currBlock, numBins);
+//        }
+//
+//
+//        // step2: calculate the difference using the Block histogram difference (BH)
+//        float totalDifference = 0;
+//        for (int i = 0; i < numBlocks; i++) {
+//            float blockDifference = calculateBlockDifference(prevHistogram[i], currHistogram[i]);
+//            totalDifference += blockDifference;
+//        }
+//        float averageDifference = totalDifference / (numBlocks * N * N);
+//        return averageDifference;
+//    }
+//
+//    private static int[] calculateHistogram(int[] block, int numBins) {
+////        int numBins = 256;
+//        int[] histogram = new int[numBins];
+//        for (int i = 0; i < block.length; i++) {
+//            histogram[block[i] * (numBins - 1) / 256]++;
+//        }
+//        return histogram;
+//    }
+//
+//    private static float calculateBlockDifference(int[] prevHistogram, int[] currHistogram) {
+//        float difference = 0;
+//        for (int i = 0; i < prevHistogram.length; i++) {
+//            float binDifference = Math.abs(prevHistogram[i] - currHistogram[i]);
+//            difference += binDifference;
+//        }
+//        return difference;
+//    }
+
+
+
+
+    public static float histogramDifference(int[] prev, int[] curr) {
+        int N = 8; // Macro-block size
+
+        // Step 1: Divide the frame into non-overlapping macro-blocks of size NxN
+        int width = getWidth();
+        int height = getHeight();
+        int numBlocksX = width / N;
+        int numBlocksY = height / N;
+
+        // Step 2: Calculate the histogram for each macro-block in the previous and current frames
+        float[] histPrev = new float[256];
+        float[] histCurr = new float[256];
+        float sumPrev = 0.0f, sumCurr = 0.0f;
+        for (int i = 0; i < numBlocksY; i++) {
+            for (int j = 0; j < numBlocksX; j++) {
+                // Calculate the starting index of the current block
+                int blockStartX = j * N;
+                int blockStartY = i * N;
+
+                // Calculate the histogram for the current block in the previous and current frames
+                Arrays.fill(histPrev, 0);
+                Arrays.fill(histCurr, 0);
+                sumPrev = 0.0f;
+                sumCurr = 0.0f;
+                for (int y = blockStartY; y < blockStartY + N; y++) {
+                    for (int x = blockStartX; x < blockStartX + N; x++) {
+                        int idx = prev[y * width + x];
+                        histPrev[idx]++;
+                        sumPrev++;
+                        idx = curr[y * width + x];
+                        histCurr[idx]++;
+                        sumCurr++;
+                    }
+                }
+
+                // Normalize the histograms
+                for (int k = 0; k < 256; k++) {
+                    histPrev[k] /= sumPrev;
+                    histCurr[k] /= sumCurr;
+                }
+
+                // Step 3: Calculate the difference between the histograms using the Bhattacharyya coefficient
+                float bc = 0.0f;
+                for (int k = 0; k < 256; k++) {
+                    bc += Math.sqrt(histPrev[k] * histCurr[k]);
+                }
+                float diff = (float) Math.sqrt(1.0f - bc);
+                if (Float.isNaN(diff)) {
+                    diff = 0.0f;
+                }
+                if (diff > 1.0f) {
+                    diff = 1.0f;
+                }
+
+                // Store the difference value in the array
+                int idx = i * numBlocksX + j;
+                histogramDiffs[idx] = diff;
+            }
         }
-        return histogram;
+
+        // Calculate the average histogram difference over all macro-blocks
+        float sum = 0.0f;
+        for (int i = 0; i < histogramDiffs.length; i++) {
+            sum += histogramDiffs[i];
+        }
+        float avgDiff = sum / histogramDiffs.length;
+
+        return avgDiff;
     }
 
-    private static float calculateBlockDifference(int[] prevHistogram, int[] currHistogram) {
-        float difference = 0;
-        for (int i = 0; i < prevHistogram.length; i++) {
-            float binDifference = Math.abs(prevHistogram[i] - currHistogram[i]);
-            difference += binDifference;
-        }
-        return difference;
-    }
+
     // it is the 3rd measurements mentioned in 1994.pdf 3.1
 
 
