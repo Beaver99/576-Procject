@@ -268,10 +268,12 @@ public class IndexExtractor {
         int N = 8; // Macro-block size
 
         // Step 1: Divide the frame into non-overlapping macro-blocks of size NxN
-        int width = getWidth();
-        int height = getHeight();
+//        int width = getWidth();
+//        int height = getHeight();
         int numBlocksX = width / N;
         int numBlocksY = height / N;
+        int numBins = 256;
+        float[] histogramDiffs = new float[numBins];
 
         // Step 2: Calculate the histogram for each macro-block in the previous and current frames
         float[] histPrev = new float[256];
