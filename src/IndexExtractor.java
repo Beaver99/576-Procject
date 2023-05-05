@@ -10,7 +10,7 @@ import java.util.ArrayList;
 public class IndexExtractor {
     static int width = 480; // width of the video frames
     static int height = 270; // height of the video frames
-    static int fps = 15; // frames per second of the video
+    static int fps = 30; // frames per second of the video
 
     static long prev_Cut_idx = 0;
 
